@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.m": "matlab",
+        "device.h": "c",
+        "typeinfo": "c",
+        "gpio.h": "c",
+        "hm01b0_regs.h": "c",
+        "hci.h": "c",
+        "tuple": "c"
+    },
+    "git.ignoreLimitWarning": true
+}
