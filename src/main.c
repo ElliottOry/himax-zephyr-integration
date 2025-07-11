@@ -184,35 +184,13 @@ static void send_frame_over_uart_hex(void)
     }
 }
 */
-/*
- * Transmit the captured frame over UART.
- *
- * The previous implementation pushed the raw pixel values directly onto the
- * UART.  That resulted in a stream that contains many non-printable ASCII
- * characters; most terminal emulators render those bytes as question marks
- * (�, ?).
- *
- * To make the output human-readable without changing the amount of data that
- * is sent, each pixel is now converted to an 8-character ASCII binary string
- * (MSB first, e.g. 0x5A -> "01011010").  The resulting stream can be viewed
- * in any terminal and parsed reliably by a host script.
- *
- * Format:
- *   <FRAME>\n
- *   <ROW 0 in binary>\n
- *   ...
- *   <ROW 119 in binary>\n
- *   </FRAME>\n
- */
+
 static void send_frame_over_uart_binary(void)
 {
     static const char frame_start[] = "<FRAME>\n";
     static const char frame_end[]   = "</FRAME>\n";
 
-    /* Helper lambda – send one character, busy-waiting until TX FIFO has
-     * space.  Zephyr provides uart_poll_out() for exactly that. */
 
-    /* 1) Start tag */
     for (size_t i = 0; i < sizeof(frame_start) - 1; i++) {
         uart_poll_out(uart_dev, frame_start[i]);
     }
@@ -224,7 +202,7 @@ static void send_frame_over_uart_binary(void)
     }
     
 
-    /* 3) End tag */
+
     for (size_t i = 0; i < sizeof(frame_end) - 1; i++) {
         uart_poll_out(uart_dev, frame_end[i]);
     }
