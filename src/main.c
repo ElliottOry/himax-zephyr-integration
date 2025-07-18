@@ -39,8 +39,8 @@
 /* Pin mapping – LVLD (HSYNC) is used as SPIS-CSN as well                    */
 #define PIN_VSYNC        27          /* FVLD from HM01B0                     */
 #define PIN_LVLD_CSN     11          /* LVLD → CSN to SPIS0                  */
-#define PIN_PCLK_SCK      8          /* PCLK → SCK to SPIS0                  */
-#define PIN_D0_MOSI       6          /* D0   → MOSI to SPIS0                 */
+//#define PIN_PCLK_SCK      8          /* PCLK → SCK to SPIS0                  */
+//#define PIN_D0_MOSI       6          /* D0   → MOSI to SPIS0                 */
 
 
 #define PIN_GATE          PIN_LVLD_CSN         /* goes high when we may ACQUIRE */
@@ -71,12 +71,10 @@
 __aligned(4)  /* EasyDMA friendly                                             */
 static uint8_t image[IMAGE_SIZE];
 
-/*  Compile-time test: linker may NOT move the buffer out of DMA RAM         */
-
 static inline void hm_i2c_write(uint16_t reg, uint8_t val);
 
 
-static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(SPI_NODE, SPI_OP, 0);
+static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(SPI_NODE, SPI_OP, 2);
 
 
 static const struct device *uart_dev   = DEVICE_DT_GET(UART_NODE);
@@ -139,8 +137,9 @@ static void arm_next_spis_transfer(void)
 struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
 struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
 
+spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_ACTIVE);
-spi_read_dt(&spispec, &rxset);
+//spi_read_dt(&spispec, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_INACTIVE);
 /*
 uint32_t got = rx.len;
@@ -208,7 +207,7 @@ void init_cam(void)
     hm_i2c_write( REG_MODE_SELECT, 0x00);//go to stand by mode
     hm_i2c_write( REG_ANA_REGISTER_17, 0x00);//register to change the clk source(osc:1 mclk:0), if no mclk it goes to osc by default
     hm_i2c_write( REG_TEST_PATTERN_MODE, 0x00);//Enable the test pattern, set it to walking 1
-
+    hm_i2c_write(0x0101 , 0x03);
     
     hm_i2c_write( REG_BIN_MODE, 0x00);//VERTICAL BIN MODE
     hm_i2c_write( REG_QVGA_WIN_EN, 0x01);//Set line length LSB to QQVGA => enabled: makes the image 160(row)*240(col)
@@ -329,7 +328,8 @@ void init_cam(void)
         hm_i2c_write( REG_BIT_CONTROL, 0x20);//Set the output to send 1 bit serial
         //hm_i2c_write(0x3062, 0xF1);
         hm_i2c_write(0x3060, 0x30);
-        hm_i2c_write(0x3023, 0x05);
+        //hm_i2c_write(0x3023, 0x05);
+        hm_i2c_write(0x0101 , 0x02);
 
         hm_i2c_write( REG_PMU_PROGRAMMABLE_FRAMECNT, 0x01);//set the number of frames to be sent out, it sends N frames
 }
@@ -346,33 +346,13 @@ static void scope_pin_init(void)
                                     (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos);
 
     /* 2) Route SPIS1 EVENTS_END to that task via PPI channel 0                */
-    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_ACQUIRED;
+    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_END;
     NRF_PPI->CH[PPI_CH].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[GPIOTE_CH];
 
     /* 3) Enable the PPI channel                                              */
     NRF_PPI->CHENSET = 1UL << PPI_CH;
 }
 
-
-void gate_trigger_init(void)
-{
-        NRF_GPIO->PIN_CNF[PIN_GATE] =
-            (GPIO_PIN_CNF_DIR_Input      << GPIO_PIN_CNF_DIR_Pos)  |
-            (GPIO_PIN_CNF_INPUT_Connect  << GPIO_PIN_CNF_INPUT_Pos)|
-            (GPIO_PIN_CNF_PULL_Pullup  << GPIO_PIN_CNF_PULL_Pos);
-
-        NRF_GPIOTE->CONFIG[GPIOTE_CH_GATE] =
-            (GPIOTE_CONFIG_MODE_Event     << GPIOTE_CONFIG_MODE_Pos) |
-            (PIN_GATE                     << GPIOTE_CONFIG_PSEL_Pos) |
-            (GPIOTE_CONFIG_POLARITY_HiToLo<< GPIOTE_CONFIG_POLARITY_Pos);
-
-        /* 2) Route the event to TASKS_ACQUIRE */
-        NRF_PPI->CH[PPI_CH_GATE].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[GPIOTE_CH_GATE];
-        NRF_PPI->CH[PPI_CH_GATE].TEP = (uint32_t)&NRF_SPIS1->TASKS_ACQUIRE;
-
-        /* 3) Enable the PPI channel */
-        NRF_PPI->CHENSET = 1UL << PPI_CH_GATE;
-}
 
 void gate_trigger_init(void)
 {
@@ -442,8 +422,7 @@ while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0) {
 }
 NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
 
-/* Enable END→ACQUIRE shortcut once the SPIS driver has been initialised */
-/* Enable END→ACQUIRE shortcut once the SPIS driver has been initialised */
+
 {
     NRF_SPIS_Type *spis =
         (NRF_SPIS_Type *)DT_REG_ADDR(DT_NODELABEL(spi1));  /* SPIS1 base */
@@ -460,7 +439,7 @@ k_sem_init(&line_sem,  0, 1);
 /* Spawn dedicated line-capture thread                                    */
 k_thread_create(&line_thread_data, line_stack, LINE_THREAD_STACK_SZ,
                 line_thread, NULL, NULL, NULL,
-                K_PRIO_PREEMPT(1), 0, K_NO_WAIT);
+                K_PRIO_PREEMPT(0), 0, K_NO_WAIT);
 
 init_cam();
 
@@ -488,7 +467,6 @@ gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
         if (i2c_write_read_dt(&dev_i2c, addr_readback, 2, &val, 1) == 0)
             printk("IMG_MODE_SEL (0x1006) = 0x%02X\n", val);
 /* ------------------------- main loop ---------------------------------- */
-
 while (true) {
 hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
 k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
