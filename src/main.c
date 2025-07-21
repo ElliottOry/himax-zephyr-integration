@@ -32,15 +32,15 @@
 /* -------------------------------------------------------------------------- */
 /* Compile-time configuration                                                 */
 /* -------------------------------------------------------------------------- */
-#define IMG_WIDTH        160
+#define IMG_WIDTH        320
 #define IMG_HEIGHT       120
 #define IMAGE_SIZE      (IMG_WIDTH * IMG_HEIGHT)
 
 /* Pin mapping – LVLD (HSYNC) is used as SPIS-CSN as well                    */
 #define PIN_VSYNC        27          /* FVLD from HM01B0                     */
 #define PIN_LVLD_CSN     11          /* LVLD → CSN to SPIS0                  */
-//#define PIN_PCLK_SCK      8          /* PCLK → SCK to SPIS0                  */
-//#define PIN_D0_MOSI       6          /* D0   → MOSI to SPIS0                 */
+#define PIN_PCLK_SCK      8          /* PCLK → SCK to SPIS0                  */
+#define PIN_D0_MOSI       6          /* D0   → MOSI to SPIS0                 */
 
 
 #define PIN_GATE          PIN_LVLD_CSN         /* goes high when we may ACQUIRE */
@@ -71,10 +71,15 @@
 __aligned(4)  /* EasyDMA friendly                                             */
 static uint8_t image[IMAGE_SIZE];
 
+/*  Compile-time test: linker may NOT move the buffer out of DMA RAM         */
+
 static inline void hm_i2c_write(uint16_t reg, uint8_t val);
 
 
 static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(SPI_NODE, SPI_OP, 2);
+
+static const nrfx_spis_t spis = NRFX_SPIS_INSTANCE(1);
+
 
 
 static const struct device *uart_dev   = DEVICE_DT_GET(UART_NODE);
@@ -87,6 +92,7 @@ static const struct device *gpio0_dev  = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 /* -------------------------------------------------------------------------- */
 static struct k_sem  frame_sem;          /* “frame is ready” semaphore       */
 static struct k_sem  line_sem;           /* given by SPIS END callback       */
+static struct k_work start_capture_work;
 
 /* A dedicated work-queue thread is faster than the system work-queue         */
 #define LINE_THREAD_STACK_SZ 768
@@ -100,6 +106,12 @@ static uint8_t *current_dst;
 /* Forward declaration */
 static void arm_next_spis_transfer(void);
 
+
+static void start_capture_fn(struct k_work *work)
+{
+    ARG_UNUSED(work);
+    k_sem_give(&line_sem);
+}
 
 /* -------------------------------------------------------------------------- */
 /* Worker thread – captures one line per iteration                            */
@@ -134,10 +146,11 @@ k_sem_give(&frame_sem);
 /* Arms SPIS for the next 240-byte DMA reception                              */
 static void arm_next_spis_transfer(void)
 {
-struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
-struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
+//struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
+//struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
 
-spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
+nrfx_spis_buffers_set(&spispec, NULL, 0, current_dst, IMG_WIDTH);
+//spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_ACTIVE);
 //spi_read_dt(&spispec, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_INACTIVE);
@@ -163,12 +176,14 @@ static void vsync_isr(const struct device *dev,
     atomic_set(&capturing, 1);
     atomic_set(&line_idx, 0);
     current_dst = image;
-
+    
+    
     k_sem_reset(&line_sem);                  /* flush stale grants        */
     /* Wake the line-capture thread so that it can start the very first
             * DMA transaction from thread context. Doing it here (ISR) would
             * violate Zephyr's rules because spi_read_dt() might sleep.        */
-    k_sem_give(&line_sem);
+    //k_sem_give(&line_sem);
+    k_work_submit(&start_capture_work);
     }
 }
 
@@ -346,7 +361,7 @@ static void scope_pin_init(void)
                                     (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos);
 
     /* 2) Route SPIS1 EVENTS_END to that task via PPI channel 0                */
-    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_END;
+    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_ENDRX;
     NRF_PPI->CH[PPI_CH].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[GPIOTE_CH];
 
     /* 3) Enable the PPI channel                                              */
@@ -422,7 +437,8 @@ while (NRF_CLOCK->EVENTS_HFCLKSTARTED == 0) {
 }
 NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
 
-
+/* Enable END→ACQUIRE shortcut once the SPIS driver has been initialised */
+/* Enable END→ACQUIRE shortcut once the SPIS driver has been initialised */
 {
     NRF_SPIS_Type *spis =
         (NRF_SPIS_Type *)DT_REG_ADDR(DT_NODELABEL(spi1));  /* SPIS1 base */
@@ -434,7 +450,7 @@ release_trigger_init();
 /* Create semaphores after driver init so ISR may use them immediately    */
 k_sem_init(&frame_sem, 0, 1);
 k_sem_init(&line_sem,  0, 1);
-
+k_work_init(&start_capture_work, start_capture_fn);
 
 /* Spawn dedicated line-capture thread                                    */
 k_thread_create(&line_thread_data, line_stack, LINE_THREAD_STACK_SZ,
@@ -446,7 +462,7 @@ init_cam();
 /* --- VSYNC pin -------------------------------------------------------- */
 gpio_pin_configure(gpio0_dev, PIN_VSYNC, GPIO_INPUT | GPIO_PULL_DOWN);
 gpio_init_callback(&vsync_cb, vsync_isr, BIT(PIN_VSYNC));
-gpio_add_callback(gpio0_dev, &vsync_cb);
+//gpio_add_callback(gpio0_dev, &vsync_cb);
 gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
 /* --- CSN pin -------------------------------------------------------- */
         uint8_t addr_readback[2];
@@ -467,10 +483,16 @@ gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
         if (i2c_write_read_dt(&dev_i2c, addr_readback, 2, &val, 1) == 0)
             printk("IMG_MODE_SEL (0x1006) = 0x%02X\n", val);
 /* ------------------------- main loop ---------------------------------- */
+//hm_i2c_write(REG_MODE_SELECT, 0x03);
+//k_sem_take(&frame_sem, K_FOREVER);
+//return -1;
 while (true) {
+//gpio_add_callback(gpio0_dev, &vsync_cb);
 hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
 k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
+//gpio_remove_callback(gpio0_dev, &vsync_cb);
 hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
+
 
 send_frame_over_uart_binary();
 }
