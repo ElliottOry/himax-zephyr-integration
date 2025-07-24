@@ -23,47 +23,10 @@
 #include <nrfx_gpiote.h>
 #include <nrfx_ppi.h>
 #include <helpers/nrfx_gppi.h>
-
-#define PIN_OUT       28            /* any free GPIO          */
-#define GPIOTE_CH     0
-#define PPI_CH        0
-#include "HM01B0Regs.h"
-
-/* -------------------------------------------------------------------------- */
-/* Compile-time configuration                                                 */
-/* -------------------------------------------------------------------------- */
-#define IMG_WIDTH        320
-#define IMG_HEIGHT       120
-#define IMAGE_SIZE      (IMG_WIDTH * IMG_HEIGHT)
-
-/* Pin mapping – LVLD (HSYNC) is used as SPIS-CSN as well                    */
-#define PIN_VSYNC        27          /* FVLD from HM01B0                     */
-#define PIN_LVLD_CSN     11          /* LVLD → CSN to SPIS0                  */
-#define PIN_PCLK_SCK      8          /* PCLK → SCK to SPIS0                  */
-#define PIN_D0_MOSI       6          /* D0   → MOSI to SPIS0                 */
-
-
-#define PIN_GATE          PIN_LVLD_CSN         /* goes high when we may ACQUIRE */
-#define GPIOTE_CH_GATE   1
-#define PPI_CH_GATE      1
-
-/* HSYNC → SPIS RELEASE bridge */
-#define PIN_HSYNC         7
-#define GPIOTE_CH_HSYNC   2              /* free GPIOTE channel            */
-#define PPI_CH_REL        2              /* PPI channel for TASKS_RELEASE   */
-
-
-/* Peripherals from DTS */
-#define UART_NODE       DT_NODELABEL(uart0)
-#define I2C_NODE        DT_ALIAS(hmm)
-#define SPI_NODE        DT_NODELABEL(gendev)
-
-/* SPIS slave, 8‑bit, MSB‑first, Mode 0 */
-#define SPI_OP (SPI_WORD_SET(8) | SPI_OP_MODE_SLAVE | SPI_TRANSFER_MSB | SPI_MODE_CPOL | SPI_MODE_CPHA)
-
-/* nRF52832 RAM span that is reachable by EasyDMA (64 kB) */
-#define DMA_RAM_START   0x20000000u
-#define DMA_RAM_END     0x20010000u
+#include <zephyr/drivers/pwm.h>
+#include "HM01B0/HM01B0_def_values.h"
+#include "HM01B0/HM01B0Regs.h"
+#include "HM01B0/HM01B0_CLK.h"
 
 /* -------------------------------------------------------------------------- */
 /* Global objects                                                             */
@@ -75,10 +38,11 @@ static uint8_t image[IMAGE_SIZE];
 
 static inline void hm_i2c_write(uint16_t reg, uint8_t val);
 
+#define SPI_OP (SPI_WORD_SET(8) | SPI_OP_MODE_SLAVE | SPI_TRANSFER_MSB | SPI_MODE_CPOL | SPI_MODE_CPHA)
 
-static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(SPI_NODE, SPI_OP, 2);
+static struct spi_dt_spec spispec = SPI_DT_SPEC_GET(SPI_NODE, SPI_OP, 0);
 
-static const nrfx_spis_t spis = NRFX_SPIS_INSTANCE(1);
+//static const nrfx_spis_t spis = NRFX_SPIS_INSTANCE(1);
 
 
 
@@ -94,12 +58,13 @@ static struct k_sem  frame_sem;          /* “frame is ready” semaphore      
 static struct k_sem  line_sem;           /* given by SPIS END callback       */
 static struct k_work start_capture_work;
 
+
 /* A dedicated work-queue thread is faster than the system work-queue         */
 #define LINE_THREAD_STACK_SZ 768
 K_THREAD_STACK_DEFINE(line_stack, LINE_THREAD_STACK_SZ);
 static struct k_thread line_thread_data;
 
-static atomic_t line_idx;
+
 static atomic_t capturing;
 static uint8_t *current_dst;
 
@@ -146,11 +111,11 @@ k_sem_give(&frame_sem);
 /* Arms SPIS for the next 240-byte DMA reception                              */
 static void arm_next_spis_transfer(void)
 {
-//struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
-//struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
+struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
+struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
 
-nrfx_spis_buffers_set(&spispec, NULL, 0, current_dst, IMG_WIDTH);
-//spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
+//nrfx_spis_buffers_set(&spispec, NULL, 0, current_dst, IMG_WIDTH);
+spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_ACTIVE);
 //spi_read_dt(&spispec, &rxset);
 //gpio_pin_configure(gpio0_dev, 28, GPIO_OUTPUT_INACTIVE);
@@ -162,6 +127,8 @@ if (got != 160) {
     */
 k_sem_give(&line_sem);
 }
+
+
 
 /* -------------------------------------------------------------------------- */
 /* VSYNC ISR – starts a new frame                                             */
@@ -201,13 +168,20 @@ i2c_write_dt(&dev_i2c, buf, sizeof buf);
 /* -------------------------------------------------------------------------- */
 /* UART helper (unchanged)                                                    */
 /* -------------------------------------------------------------------------- */
+
 static void send_frame_over_uart_binary(void)
 {
 static const char hdr[]  = "<FRAME>\n";
 static const char tail[] = "</FRAME>\n";
 
 for (int i = 0; i < sizeof hdr - 1; i++)  uart_poll_out(uart_dev, hdr[i]);
-for (size_t i = 0; i < IMAGE_SIZE; i++)   uart_poll_out(uart_dev, image[i]);
+for (size_t i = 0; i < IMAGE_SIZE; i++)
+{
+    if(i%IMG_WIDTH == 0 || i%IMG_WIDTH-1 == 0) {
+        continue; /* skip first and last byte of each line */
+    }
+    uart_poll_out(uart_dev, image[i]);
+}   
 for (int i = 0; i < sizeof tail - 1; i++) uart_poll_out(uart_dev, tail[i]);
 }
 
@@ -220,11 +194,11 @@ void init_cam(void)
 
 
     hm_i2c_write( REG_MODE_SELECT, 0x00);//go to stand by mode
-    hm_i2c_write( REG_ANA_REGISTER_17, 0x00);//register to change the clk source(osc:1 mclk:0), if no mclk it goes to osc by default
+    //hm_i2c_write( REG_ANA_REGISTER_17, 0x00);//register to change the clk source(osc:1 mclk:0), if no mclk it goes to osc by default
     hm_i2c_write( REG_TEST_PATTERN_MODE, 0x00);//Enable the test pattern, set it to walking 1
-    hm_i2c_write(0x0101 , 0x03);
+    //hm_i2c_write(0x0101 , 0x03);
     
-    hm_i2c_write( REG_BIN_MODE, 0x00);//VERTICAL BIN MODE
+    hm_i2c_write( REG_BIN_MODE, 0x03);//VERTICAL BIN MODE
     hm_i2c_write( REG_QVGA_WIN_EN, 0x01);//Set line length LSB to QQVGA => enabled: makes the image 160(row)*240(col)
 //    disable: image 160*320 //In test pattern mode, enabling this does not have any effect
 
@@ -232,19 +206,19 @@ void init_cam(void)
     //hm_i2c_write(0x0103,0x00);
 
     //100*100 optimization
-    hm_i2c_write( REG_BIN_RDOUT_X, 0x01);//Horizontal Binning enable
-    hm_i2c_write( REG_BIN_RDOUT_Y, 0x01);//vertical Binning enable => this register should be always 0x03 because we never go more than 160 for the height
+    hm_i2c_write( REG_BIN_RDOUT_X, 0x03);//Horizontal Binning enable
+    hm_i2c_write( REG_BIN_RDOUT_Y, 0x03);//vertical Binning enable => this register should be always 0x03 because we never go more than 160 for the height
         //frame timing control
-    hm_i2c_write(REG_FRAME_LENGTH_PCK_H,0x01);
-    hm_i2c_write(REG_FRAME_LENGTH_PCK_L,0x78);//changed by Ali
+    hm_i2c_write(REG_FRAME_LENGTH_PCK_H,0x00);
+    hm_i2c_write(REG_FRAME_LENGTH_PCK_L,0xD7);//changed by Ali
 
-    hm_i2c_write(REG_FRAME_LENGTH_LINES_H,0x02);//changed by Ali
-    hm_i2c_write(REG_FRAME_LENGTH_LINES_L,0x12);//changed by Ali   
+    hm_i2c_write(REG_FRAME_LENGTH_LINES_H,0x00);//changed by Ali
+    hm_i2c_write(REG_FRAME_LENGTH_LINES_L,0x80);//changed by Ali   
 
     /*looking at lattice cfg setting*/
     //hm_i2c_write(0x0103,0x00);
-
-
+    hm_i2c_write(0x0104 ,0x01);
+    /*
     hm_i2c_write(0x3044,0x0A);
     hm_i2c_write(0x3045,0x00);
     hm_i2c_write(0x3047,0x0A);
@@ -299,9 +273,9 @@ void init_cam(void)
     hm_i2c_write(0x2018,0x9B);
 
     //Automatic exposure gain control
-    hm_i2c_write(0x2100,0x01);
+    
     hm_i2c_write(0x2101,0x70);//0x70);//lattice 0xA0
-    hm_i2c_write(0x2102,0x01);//lattice 0x06
+    hm_i2c_write(0x2102,0x06);//lattice 0x06
     hm_i2c_write(0x2104,0x07);
     hm_i2c_write(0x2105,0x03);
     hm_i2c_write(0x2106,0xA4);
@@ -314,14 +288,14 @@ void init_cam(void)
     hm_i2c_write(0x2111,0x01);
     hm_i2c_write(0x2112,0x17);
     hm_i2c_write(0x2150,0x03);
-
+*/
     //Sensor exposure gain
-    hm_i2c_write(0x0205,0x05);//Vikram
+    hm_i2c_write(0x0205,0x00);//Vikram
     hm_i2c_write(0x020E,0x01);//Vikram
     hm_i2c_write(0x020F,0x00);//Vikram
-    hm_i2c_write(0x0202,0x01);//Vikram
-    hm_i2c_write(0x0203,0x08);//Vikram
-
+    hm_i2c_write(0x0202,0x00);//Vikram
+    hm_i2c_write(0x0203,0x30);//Vikram
+    hm_i2c_write(0x2100,0x01);
     //frame timing control
 //    hm_i2c_write(0x0340,0x02);//changed by Ali
 //    hm_i2c_write(0x0341,0x32);//changed by Ali    
@@ -338,15 +312,23 @@ void init_cam(void)
 //    hm_i2c_write(0x0390,0x00); //done in lower lines
 //    hm_i2c_write(0x3059,0x42); //done in lower lines
 //    hm_i2c_write(0x3060,0x51); //done in lower lines
-        hm_i2c_write( REG_OSC_CLK_DIV, 0x30);//This is effective when we use external clk, Use the camera in the gated clock mode to make the clock zero when there is no data
+        //hm_i2c_write( REG_OSC_CLK_DIV, 0x30);//This is effective when we use external clk, Use the camera in the gated clock mode to make the clock zero when there is no data
 
         hm_i2c_write( REG_BIT_CONTROL, 0x20);//Set the output to send 1 bit serial
-        //hm_i2c_write(0x3062, 0xF1);
+        //hm_i2c_write(0x3062, 0xFF);
+        //hm_i2c_write(0x0202, 0x00);
+        //hm_i2c_write(0x0203, 0x08);
+        //hm_i2c_write(0x2101, 0x06);
+        //hm_i2c_write(0x2105, 0x01);
         hm_i2c_write(0x3060, 0x30);
+        hm_i2c_write(0x1012, 0x03);
         //hm_i2c_write(0x3023, 0x05);
-        hm_i2c_write(0x0101 , 0x02);
+        //hm_i2c_write(0x0101 , 0x02);
 
-        hm_i2c_write( REG_PMU_PROGRAMMABLE_FRAMECNT, 0x01);//set the number of frames to be sent out, it sends N frames
+        //hm_i2c_write( REG_PMU_PROGRAMMABLE_FRAMECNT, 0x01);//set the number of frames to be sent out, it sends N frames
+        
+
+        //hm_clk_enable(true);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -361,7 +343,7 @@ static void scope_pin_init(void)
                                     (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos);
 
     /* 2) Route SPIS1 EVENTS_END to that task via PPI channel 0                */
-    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_ENDRX;
+    NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_END;
     NRF_PPI->CH[PPI_CH].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[GPIOTE_CH];
 
     /* 3) Enable the PPI channel                                              */
@@ -403,7 +385,7 @@ static void release_trigger_init(void)
     NRF_GPIOTE->CONFIG[GPIOTE_CH_HSYNC] =
           (GPIOTE_CONFIG_MODE_Event      << GPIOTE_CONFIG_MODE_Pos) |
           (PIN_HSYNC                      << GPIOTE_CONFIG_PSEL_Pos) |
-          (GPIOTE_CONFIG_POLARITY_LoToHi  << GPIOTE_CONFIG_POLARITY_Pos);
+          (GPIOTE_CONFIG_POLARITY_HiToLo  << GPIOTE_CONFIG_POLARITY_Pos);
 
     /* 2) Route the event to TASKS_RELEASE */
     NRF_PPI->CH[PPI_CH_REL].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[GPIOTE_CH_HSYNC];
@@ -415,8 +397,26 @@ static void release_trigger_init(void)
 
 
 
+
+
+
+/* Now send_frame_over_uart_binary(); */
+
+//static const struct pwm_dt_spec servo = PWM_DT_SPEC_GET(DT_NODELABEL(servo));
+
 int main(void)
 {
+    printk("hello");
+//uint32_t pulse_width = 222;
+//int ret = pwm_set_pulse_dt(&servo, pulse_width);
+//ret = pwm_set_dt(&servo, 200, 200 / 2U);
+//k_yield();
+/* once at boot, right after spis init */
+hm_clk_out();
+k_msleep(100);
+
+
+/* leave this on forever */
 //spispec.config = spi_cfg_pwr1;
 __ASSERT(((uintptr_t)image) >= DMA_RAM_START &&((uintptr_t)image + IMAGE_SIZE) <= DMA_RAM_END, "image[] must live in the first 64 kB of SRAM (EasyDMA)");
 if (!device_is_ready(uart_dev)      ||
@@ -442,11 +442,13 @@ NRF_CLOCK->EVENTS_HFCLKSTARTED = 0;
 {
     NRF_SPIS_Type *spis =
         (NRF_SPIS_Type *)DT_REG_ADDR(DT_NODELABEL(spi1));  /* SPIS1 base */
-    //spis->SHORTS |= SPIS_SHORTS_END_ACQUIRE_Msk;
+    spis->SHORTS |= SPIS_SHORTS_END_ACQUIRE_Msk;
 }
+
 scope_pin_init();
 gate_trigger_init();
 release_trigger_init();
+//test poop
 /* Create semaphores after driver init so ISR may use them immediately    */
 k_sem_init(&frame_sem, 0, 1);
 k_sem_init(&line_sem,  0, 1);
@@ -462,7 +464,7 @@ init_cam();
 /* --- VSYNC pin -------------------------------------------------------- */
 gpio_pin_configure(gpio0_dev, PIN_VSYNC, GPIO_INPUT | GPIO_PULL_DOWN);
 gpio_init_callback(&vsync_cb, vsync_isr, BIT(PIN_VSYNC));
-//gpio_add_callback(gpio0_dev, &vsync_cb);
+gpio_add_callback(gpio0_dev, &vsync_cb);
 gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
 /* --- CSN pin -------------------------------------------------------- */
         uint8_t addr_readback[2];
@@ -486,14 +488,15 @@ gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
 //hm_i2c_write(REG_MODE_SELECT, 0x03);
 //k_sem_take(&frame_sem, K_FOREVER);
 //return -1;
+
 while (true) {
+hm_i2c_write(REG_MODE_SELECT, 0x03);
 //gpio_add_callback(gpio0_dev, &vsync_cb);
-hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
+//hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
 k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
 //gpio_remove_callback(gpio0_dev, &vsync_cb);
-hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
-
-
+//hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
+hm_i2c_write(REG_MODE_SELECT, 0x00);
 send_frame_over_uart_binary();
 }
 }

@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/CMakeFiles/custom_target_6"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/CMakeFiles/custom_target_6.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/CMakeFiles/custom_target_6-complete.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-build.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-configure.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-download.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-install.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-mkdir.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-patch.rule"
+		},
+		{
+			"file" : "/Users/elliottory/workspace/custom_target_6/build/_sysbuild/sysbuild/images/custom_target_6-prefix/src/custom_target_6-stamp/custom_target_6-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"custom_target_6"
+		],
+		"name" : "custom_target_6"
+	}
+}

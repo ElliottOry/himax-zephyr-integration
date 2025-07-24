@@ -1,0 +1,55 @@
+cmake:
+  application:
+    configuration-dir: /Users/elliottory/workspace/custom_target_6
+    source-dir: /Users/elliottory/workspace/custom_target_6
+  board:
+    name: nrf52_adafruit_feather
+    path:
+     - /opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather
+    qualifiers: nrf52832
+    revision: 
+  devicetree:
+    bindings-dirs:
+     - /opt/nordic/ncs/v3.0.2/nrf/dts/bindings
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/bindings
+    files:
+     - /opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather/nrf52_adafruit_feather.dts
+     - nrf52_adafruit_feather_nrf52832.overlay
+    include-dirs:
+     - /opt/nordic/ncs/v3.0.2/nrf/include
+     - /opt/nordic/ncs/v3.0.2/nrf/dts/common
+     - /opt/nordic/ncs/v3.0.2/nrf/dts/riscv
+     - /opt/nordic/ncs/v3.0.2/nrf/dts/arm
+     - /opt/nordic/ncs/v3.0.2/nrf/dts
+     - /opt/nordic/ncs/v3.0.2/zephyr/include
+     - /opt/nordic/ncs/v3.0.2/zephyr/include/zephyr
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/common
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/x86
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/xtensa
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/sparc
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/riscv
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/posix
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/nios2
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/arm64
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/arm
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts/arc
+     - /opt/nordic/ncs/v3.0.2/zephyr/dts
+    user-files:
+     - nrf52_adafruit_feather_nrf52832.overlay
+  kconfig:
+    files:
+     - /opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather/nrf52_adafruit_feather_defconfig
+     - /Users/elliottory/workspace/custom_target_6/prj.conf
+     - /Users/elliottory/workspace/custom_target_6/build/custom_target_6/zephyr/.config.sysbuild
+    user-files:
+     - /Users/elliottory/workspace/custom_target_6/prj.conf
+  toolchain:
+    name: zephyr
+    path: /opt/nordic/ncs/toolchains/ef4fc6722e/opt/zephyr-sdk
+  vendor-specific:
+    nordic:
+      svdfile: /opt/nordic/ncs/v3.0.2/modules/hal/nordic/nrfx/mdk/nrf52.svd
+  zephyr:
+    version: 4.0.99
+    zephyr-base: /opt/nordic/ncs/v3.0.2/zephyr
+version: 0.1.0

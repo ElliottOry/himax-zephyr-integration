@@ -1,0 +1,19 @@
+{
+  "toolchainPath": "/opt/nordic/ncs/toolchains/ef4fc6722e",
+  "sdkPath": "/opt/nordic/ncs/v3.0.2",
+  "board": "nrf52_adafruit_feather/nrf52832",
+  "boardDir": "/opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather",
+  "boardDirs": [
+    "/opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather"
+  ],
+  "optimizations": "none",
+  "cmakeArgs": [],
+  "confFiles": [],
+  "buildDirectory": "build",
+  "kconfigFragments": [],
+  "snippets": [],
+  "dtcOverlays": [
+    "nrf52_adafruit_feather_nrf52832.overlay"
+  ],
+  "extraDtcOverlays": []
+}

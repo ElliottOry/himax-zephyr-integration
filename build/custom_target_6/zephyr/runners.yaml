@@ -1,0 +1,39 @@
+# Available runners configured by board.cmake.
+runners:
+- nrfutil
+- nrfjprog
+- jlink
+- pyocd
+
+# Default flash runner if --runner is not given.
+flash-runner: nrfutil
+
+# Default debug runner if --runner is not given.
+debug-runner: jlink
+
+# Common runner configuration values.
+config:
+  board_dir: /opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather
+  # Build outputs:
+  elf_file: zephyr.elf
+  hex_file: /Users/elliottory/workspace/custom_target_6/build/merged.hex
+  bin_file: zephyr.bin
+  # Host tools:
+  gdb: /opt/nordic/ncs/toolchains/ef4fc6722e/opt/zephyr-sdk/arm-zephyr-eabi/bin/arm-zephyr-eabi-gdb
+
+# Runner specific arguments
+args:
+  nrfutil:
+    []
+
+  nrfjprog:
+    []
+
+  jlink:
+    - --dt-flash=y
+    - --device=nRF52832_xxAA
+    - --speed=4000
+  pyocd:
+    - --dt-flash=y
+    - --target=nrf52832
+    - --frequency=4000000

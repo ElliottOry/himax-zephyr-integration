@@ -1,0 +1,7 @@
+default: custom_target_6
+build_dir: /Users/elliottory/workspace/custom_target_6/build
+domains:
+  - name: custom_target_6
+    build_dir: /Users/elliottory/workspace/custom_target_6/build/custom_target_6
+flash_order:
+  - custom_target_6
