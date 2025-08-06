@@ -4,3 +4,4 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(xiao-ble-stream)
 
 target_sources(app PRIVATE src/main.c)
+zephyr_library_include_directories(${ZEPHYR_BASE}/samples/bluetooth)
