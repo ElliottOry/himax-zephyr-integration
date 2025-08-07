@@ -50,7 +50,7 @@ static const struct device *uart_dev   = DEVICE_DT_GET(UART_NODE);
 static const struct i2c_dt_spec dev_i2c = I2C_DT_SPEC_GET(I2C_NODE);
 static const struct device *gpio0_dev  = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
-
+extern void run_peripheral_step( uint16_t seconds);
 /* -------------------------------------------------------------------------- */
 /* Synchronisation primitives                                                 */
 /* -------------------------------------------------------------------------- */
@@ -498,5 +498,6 @@ k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
 //hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
 hm_i2c_write(REG_MODE_SELECT, 0x00);
 send_frame_over_uart_binary();
+run_peripheral_step(0);
 }
 }
