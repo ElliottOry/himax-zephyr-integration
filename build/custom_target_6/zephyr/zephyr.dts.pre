@@ -878,6 +878,15 @@ feather_i2c: &i2c0 {};
 # 0 "<command-line>" 2
 # 1 "./nrf52_adafruit_feather_nrf52832.overlay" 1
 # 15 "./nrf52_adafruit_feather_nrf52832.overlay"
+/ {
+ servo: servo {
+  compatible = "pwm-servo";
+  pwms = <&pwm0 0 (333) (0 << 0)>;
+  min-pulse = <(100)>;
+  max-pulse = <((2500) * 1000UL)>;
+ };
+};
+
 &i2c0 {
     status = "okay";
     pinctrl-0 = <&i2c0_default>;
@@ -887,18 +896,21 @@ feather_i2c: &i2c0 {};
         compatible = "i2c-device";
         status = "okay";
         reg = < 0x24 >;
-        vsync-gpios = <&gpio0 2 0>;
-        hsync-gpios = <&gpio0 3 0>;
-        pclk-gpios = <&gpio0 4 0>;
-        data0-gpios = <&gpio0 5 0>;
-
-
+        vsync-gpios = <&gpio0 27 0>;
 
     };
 };
 
 
-&spi0 { status = "disabled";};
+
+&spi0 {
+    compatible = "nordic,nrf-spis";
+    status = "disabled";
+    pinctrl-0 = <&spi1_default>;
+    pinctrl-1 = <&spi1_sleep>;
+    pinctrl-names = "default", "sleep";
+    def-char = <0>;
+};
 &i2c1 { status = "disabled";};
 &spi1 {
  compatible = "nordic,nrf-spis";
@@ -910,30 +922,54 @@ feather_i2c: &i2c0 {};
  gendev: gendev@0 {
     compatible = "adi,adxl362";
     reg = <0>;
-        spi-max-frequency = <320000>;
+    spi-max-frequency = <36000000>;
 };
 };
 
+
+
+
+&pwm0 {
+ status = "disabled";
+ pinctrl-0 = <&pwm0_custom>;
+ pinctrl-1 = <&pwm0_csleep>;
+ pinctrl-names = "default", "sleep";
+   };
 
 &pinctrl {
     spi1_default: spi1_default {
     group1 {
-    psels = <((((((0) * 32U) + (12)) & 0x1FFU) << 0U) | ((7U & 0xFFU) << 24U))>,
-    <((((((0) * 32U) + (13)) & 0x1FFU) << 0U) | ((8U & 0xFFU) << 24U))>,
+    psels = <((((((0) * 32U) + (15)) & 0x1FFU) << 0U) | ((7U & 0xFFU) << 24U))>,
+    <((((((0) * 32U) + (16)) & 0x1FFU) << 0U) | ((8U & 0xFFU) << 24U))>,
     <((((((0) * 32U) + (14)) & 0x1FFU) << 0U) | ((9U & 0xFFU) << 24U))>,
     <((((((0) * 32U) + (7)) & 0x1FFU) << 0U) | ((10U & 0xFFU) << 24U))>;
     };
-    };
+};
     spi1_sleep: spi1_sleep {
     group1 {
-    psels = <((((((0) * 32U) + (12)) & 0x1FFU) << 0U) | ((7U & 0xFFU) << 24U))>,
-    <((((((0) * 32U) + (13)) & 0x1FFU) << 0U) | ((8U & 0xFFU) << 24U))>,
+    psels = <((((((0) * 32U) + (15)) & 0x1FFU) << 0U) | ((7U & 0xFFU) << 24U))>,
+    <((((((0) * 32U) + (16)) & 0x1FFU) << 0U) | ((8U & 0xFFU) << 24U))>,
     <((((((0) * 32U) + (14)) & 0x1FFU) << 0U) | ((9U & 0xFFU) << 24U))>,
     <((((((0) * 32U) + (7)) & 0x1FFU) << 0U) | ((10U & 0xFFU) << 24U))>;
     low-power-enable;
     };
-    };
-   };
+};
+
+    pwm0_custom: pwm0_custom {
+ group1 {
+ psels = <((((((0) * 32U) + (3)) & 0x1FFU) << 0U) | ((22U & 0xFFU) << 24U))>;
+ nordic,invert;
+ };
+ }; pwm0_csleep: pwm0_csleep {
+ group1 {
+ psels = <((((((0) * 32U) + (3)) & 0x1FFU) << 0U) | ((22U & 0xFFU) << 24U))>;
+ low-power-enable;
+ };
+ };
+};
+
+
+
 
 &uart0 {
     compatible = "nordic,nrf-uarte";

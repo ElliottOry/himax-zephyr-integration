@@ -5,6 +5,9 @@
 * SPDX-License-Identifier: Apache-2.0
 */
 
+
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -23,18 +26,28 @@
 #include <nrfx_gpiote.h>
 #include <nrfx_ppi.h>
 #include <helpers/nrfx_gppi.h>
-#include <zephyr/drivers/pwm.h>
+//#include <zephyr/drivers/pwm.h>
+
+
+
+
 #include "HM01B0/HM01B0_def_values.h"
 #include "HM01B0/HM01B0Regs.h"
 #include "HM01B0/HM01B0_CLK.h"
 
+
+
+
 /* -------------------------------------------------------------------------- */
 /* Global objects                                                             */
 /* -------------------------------------------------------------------------- */
-__aligned(4)  /* EasyDMA friendly                                             */
+__aligned(4)  /* EasyDMA friendly */
 static uint8_t image[IMAGE_SIZE];
 
+
 /*  Compile-time test: linker may NOT move the buffer out of DMA RAM         */
+
+extern void run_peripheral_step( uint16_t seconds, uint8_t *image);
 
 static inline void hm_i2c_write(uint16_t reg, uint8_t val);
 
@@ -336,23 +349,31 @@ void init_cam(void)
 /* -------------------------------------------------------------------------- */
 static void scope_pin_init(void)
 {
-    /* 1) P0.17 as output driven by GPIOTE task                                */
+    /* 1) P0.17 as output driven by GPIOTE task                                
     NRF_GPIO->DIRSET = 1UL << PIN_OUT;
     NRF_GPIOTE->CONFIG[GPIOTE_CH] = (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos) |
                                     (PIN_OUT                 << GPIOTE_CONFIG_PSEL_Pos) |
                                     (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos);
 
-    /* 2) Route SPIS1 EVENTS_END to that task via PPI channel 0                */
+
     NRF_PPI->CH[PPI_CH].EEP = (uint32_t)&NRF_SPIS1->EVENTS_END;
     NRF_PPI->CH[PPI_CH].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[GPIOTE_CH];
 
-    /* 3) Enable the PPI channel                                              */
+
     NRF_PPI->CHENSET = 1UL << PPI_CH;
+*/
+    static nrf_ppi_channel_t ch;
+    nrfx_gppi_channel_alloc(&ch);
+    nrfx_gppi_event_endpoint_setup(ch, nrf_spis_event_address_get(NRF_SPIS1, NRF_SPIS_EVENT_END));
+    nrfx_gppi_task_endpoint_setup(ch, nrf_gpiote_task_address_get(NRF_GPIOTE, NRF_GPIOTE_TASK_OUT_0 + GPIOTE_CH));
+    nrfx_gppi_channels_enable(BIT(ch));
 }
 
 
 void gate_trigger_init(void)
 {
+    static nrf_ppi_channel_t ch;
+    
         NRF_GPIO->PIN_CNF[PIN_GATE] =
             (GPIO_PIN_CNF_DIR_Input      << GPIO_PIN_CNF_DIR_Pos)  |
             (GPIO_PIN_CNF_INPUT_Connect  << GPIO_PIN_CNF_INPUT_Pos)|
@@ -363,12 +384,20 @@ void gate_trigger_init(void)
             (PIN_GATE                     << GPIOTE_CONFIG_PSEL_Pos) |
             (GPIOTE_CONFIG_POLARITY_HiToLo<< GPIOTE_CONFIG_POLARITY_Pos);
 
-        /* 2) Route the event to TASKS_ACQUIRE */
+        /* 2) Route the event to SPIS1 TASKS_ACQUIRE 
         NRF_PPI->CH[PPI_CH_GATE].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[GPIOTE_CH_GATE];
         NRF_PPI->CH[PPI_CH_GATE].TEP = (uint32_t)&NRF_SPIS1->TASKS_ACQUIRE;
 
-        /* 3) Enable the PPI channel */
+
         NRF_PPI->CHENSET = 1UL << PPI_CH_GATE;
+        
+        */
+    nrfx_gppi_channel_alloc(&ch);
+    nrfx_gppi_event_endpoint_setup(ch, nrf_gpiote_event_address_get(NRF_GPIOTE, (nrf_gpiote_event_t)(NRF_GPIOTE_EVENT_IN_0 + GPIOTE_CH_GATE)));
+    nrfx_gppi_task_endpoint_setup(ch,nrf_spis_task_address_get(NRF_SPIS1, NRF_SPIS_TASK_ACQUIRE));
+        /* 4) Enable the channel */
+    nrfx_gppi_channels_enable(BIT(ch));
+
 }
 
 
@@ -377,6 +406,7 @@ void gate_trigger_init(void)
 /* -------------------------------------------------------------------------- */
 static void release_trigger_init(void)
 {
+    static nrf_ppi_channel_t ch;
     /* 1) Configure PIN_HSYNC as input (it already is) and generate an event on Hi→Lo */
     NRF_GPIO->PIN_CNF[PIN_HSYNC] =
           (GPIO_PIN_CNF_DIR_Input      << GPIO_PIN_CNF_DIR_Pos)  |
@@ -387,12 +417,18 @@ static void release_trigger_init(void)
           (PIN_HSYNC                      << GPIOTE_CONFIG_PSEL_Pos) |
           (GPIOTE_CONFIG_POLARITY_HiToLo  << GPIOTE_CONFIG_POLARITY_Pos);
 
-    /* 2) Route the event to TASKS_RELEASE */
+    /* 2) Route the event to TASKS_RELEASE 
     NRF_PPI->CH[PPI_CH_REL].EEP = (uint32_t)&NRF_GPIOTE->EVENTS_IN[GPIOTE_CH_HSYNC];
     NRF_PPI->CH[PPI_CH_REL].TEP = (uint32_t)&NRF_SPIS1->TASKS_RELEASE;
 
-    /* 3) Enable PPI channel */
-    NRF_PPI->CHENSET = 1UL << PPI_CH_REL;
+ 3) Enable PPI channel 
+    NRF_PPI->CHENSET = 1UL << PPI_CH_REL; */
+    nrfx_gppi_channel_alloc(&ch);
+    nrfx_gppi_event_endpoint_setup(ch, nrf_gpiote_event_address_get(NRF_GPIOTE, (nrf_gpiote_event_t)(NRF_GPIOTE_EVENT_IN_0 + GPIOTE_CH_HSYNC)));
+    nrfx_gppi_task_endpoint_setup(ch,nrf_spis_task_address_get(NRF_SPIS1, NRF_SPIS_TASK_ACQUIRE));
+        /* 4) Enable the channel */
+    nrfx_gppi_channels_enable(BIT(ch));
+
 }
 
 
@@ -406,7 +442,7 @@ static void release_trigger_init(void)
 
 int main(void)
 {
-    printk("hello");
+printk("hello");
 //uint32_t pulse_width = 222;
 //int ret = pwm_set_pulse_dt(&servo, pulse_width);
 //ret = pwm_set_dt(&servo, 200, 200 / 2U);
@@ -489,6 +525,8 @@ gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
 //k_sem_take(&frame_sem, K_FOREVER);
 //return -1;
 
+
+
 while (true) {
 hm_i2c_write(REG_MODE_SELECT, 0x03);
 //gpio_add_callback(gpio0_dev, &vsync_cb);
@@ -497,6 +535,7 @@ k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
 //gpio_remove_callback(gpio0_dev, &vsync_cb);
 //hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
 hm_i2c_write(REG_MODE_SELECT, 0x00);
-send_frame_over_uart_binary();
+run_peripheral_step(0, image);
+//send_frame_over_uart_binary();
 }
 }

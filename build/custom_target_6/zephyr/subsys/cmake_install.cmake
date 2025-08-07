@@ -137,3 +137,8 @@ if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   include("/Users/elliottory/workspace/custom_target_6/build/custom_target_6/zephyr/subsys/usb/cmake_install.cmake")
 endif()
 
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("/Users/elliottory/workspace/custom_target_6/build/custom_target_6/zephyr/subsys/bluetooth/cmake_install.cmake")
+endif()
+

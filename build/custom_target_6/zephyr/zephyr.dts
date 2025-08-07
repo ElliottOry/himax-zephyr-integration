@@ -142,14 +142,11 @@
 				compatible = "i2c-device";
 				status = "okay";
 				reg = < 0x24 >;
-				vsync-gpios = < &gpio0 0x2 0x0 >;
-				hsync-gpios = < &gpio0 0x3 0x0 >;
-				pclk-gpios = < &gpio0 0x4 0x0 >;
-				data0-gpios = < &gpio0 0x5 0x0 >;
+				vsync-gpios = < &gpio0 0x1b 0x0 >;
 			};
 		};
 		spi0: spi@40003000 {
-			compatible = "nordic,nrf-spi";
+			compatible = "nordic,nrf-spis";
 			#address-cells = < 0x1 >;
 			#size-cells = < 0x0 >;
 			reg = < 0x40003000 0x1000 >;
@@ -157,6 +154,10 @@
 			max-frequency = < 0x7a1200 >;
 			easydma-maxcnt-bits = < 0x8 >;
 			status = "disabled";
+			pinctrl-0 = < &spi1_default >;
+			pinctrl-1 = < &spi1_sleep >;
+			pinctrl-names = "default", "sleep";
+			def-char = < 0x0 >;
 		};
 		i2c1: i2c@40004000 {
 			compatible = "nordic,nrf-twim";
@@ -184,7 +185,7 @@
 			gendev: gendev@0 {
 				compatible = "adi,adxl362";
 				reg = < 0x0 >;
-				spi-max-frequency = < 0x4e200 >;
+				spi-max-frequency = < 0x2255100 >;
 			};
 		};
 		nfct: nfct@40005000 {
@@ -356,10 +357,10 @@
 			compatible = "nordic,nrf-pwm";
 			reg = < 0x4001c000 0x1000 >;
 			interrupts = < 0x1c 0x1 >;
-			status = "okay";
+			status = "disabled";
 			#pwm-cells = < 0x3 >;
-			pinctrl-0 = < &pwm0_default >;
-			pinctrl-1 = < &pwm0_sleep >;
+			pinctrl-0 = < &pwm0_custom >;
+			pinctrl-1 = < &pwm0_csleep >;
 			pinctrl-names = "default", "sleep";
 			phandle = < 0xd >;
 		};
@@ -497,13 +498,11 @@
 			};
 		};
 		pwm0_default: pwm0_default {
-			phandle = < 0x9 >;
 			group1 {
 				psels = < 0x16000011 >, < 0x17000013 >;
 			};
 		};
 		pwm0_sleep: pwm0_sleep {
-			phandle = < 0xa >;
 			group1 {
 				psels = < 0x16000011 >, < 0x17000013 >;
 				low-power-enable;
@@ -512,13 +511,27 @@
 		spi1_default: spi1_default {
 			phandle = < 0x7 >;
 			group1 {
-				psels = < 0x700000c >, < 0x800000d >, < 0x900000e >, < 0xa000007 >;
+				psels = < 0x700000f >, < 0x8000010 >, < 0x900000e >, < 0xa000007 >;
 			};
 		};
 		spi1_sleep: spi1_sleep {
 			phandle = < 0x8 >;
 			group1 {
-				psels = < 0x700000c >, < 0x800000d >, < 0x900000e >, < 0xa000007 >;
+				psels = < 0x700000f >, < 0x8000010 >, < 0x900000e >, < 0xa000007 >;
+				low-power-enable;
+			};
+		};
+		pwm0_custom: pwm0_custom {
+			phandle = < 0x9 >;
+			group1 {
+				psels = < 0x16000003 >;
+				nordic,invert;
+			};
+		};
+		pwm0_csleep: pwm0_csleep {
+			phandle = < 0xa >;
+			group1 {
+				psels = < 0x16000003 >;
 				low-power-enable;
 			};
 		};
@@ -584,5 +597,11 @@
 			label = "Button";
 			zephyr,code = < 0xb >;
 		};
+	};
+	servo: servo {
+		compatible = "pwm-servo";
+		pwms = < &pwm0 0x0 0x14d 0x0 >;
+		min-pulse = < 0x64 >;
+		max-pulse = < 0x2625a0 >;
 	};
 };

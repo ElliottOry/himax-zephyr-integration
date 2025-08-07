@@ -6,3 +6,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(custom_target_3)
 
 target_sources(app PRIVATE src/main.c)
+target_sources(app PRIVATE src/ble_manager.c)
+target_sources(app PRIVATE src/HM01B0/HM01B0_CLK.c)
+

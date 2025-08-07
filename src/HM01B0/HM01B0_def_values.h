@@ -10,8 +10,9 @@
 #define IMAGE_SIZE (IMG_WIDTH * IMG_HEIGHT)
 
 
+
 #define PIN_MCLK 3
-#define MCLK_TIMER_INSTANCE 0
+#define MCLK_TIMER_INSTANCE 3
 
 /* Pin mapping – LVLD (HSYNC) is used as SPIS-CSN as well                    */
 #define PIN_VSYNC        27          /* FVLD from HM01B0                     */
