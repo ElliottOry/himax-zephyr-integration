@@ -30,6 +30,10 @@
 /* Overhead: opcode (u8) + handle (u16) */
 #define ATT_NTF_SIZE(payload_len) (1 + 2 + payload_len)
 
+#define IMG_WIDTH  160
+#define IMG_HEIGHT 119
+extern uint8_t image[];
+
 #define CHUNK_SIZE CONFIG_BT_L2CAP_TX_MTU
 
 
@@ -58,11 +62,13 @@ static struct k_work advertise_work;
 
 
 //Defing dummy data buffer and stream specific variables
-static uint8_t data_to_send[1000];
+// static uint8_t data_to_send[1000];
 uint16_t ble_mtu =0;
-bool stream_en = false;
+// bool stream_en = false;
+uint8_t tx_state = 0;
 
-
+bool char_tx = false;
+bool notif_state[2] = {false, false};
 
 static ssize_t on_rx_received(struct bt_conn *conn,
                               const struct bt_gatt_attr *attr,
@@ -81,9 +87,17 @@ void advertising_work_handler(struct k_work *work) {
 	bt_le_adv_start(BT_LE_ADV_CONN_ONE_TIME, adv_ad_data, ARRAY_SIZE(adv_ad_data), NULL, 0);
 }
 
-static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
+static void ccc_cfg_changed_tx(const struct bt_gatt_attr *attr, uint16_t value) {
     bool notif_enabled = (value == BT_GATT_CCC_NOTIFY);
-    printk("Notifications %s\n", notif_enabled ? "enabled" : "disabled");
+    notif_state[1] = notif_enabled;
+    printk("Tx Notifications %s\n", notif_enabled ? "enabled" : "disabled");
+
+}
+
+static void ccc_cfg_changed_img_info(const struct bt_gatt_attr *attr, uint16_t value) {
+    bool notif_enabled = (value == BT_GATT_CCC_NOTIFY);
+    notif_state[0] = notif_enabled;
+    printk("Img Info Notifications %s\n", notif_enabled ? "enabled" : "disabled");
 
 }
          
@@ -91,9 +105,9 @@ BT_GATT_SERVICE_DEFINE(
     insect_cam,
     BT_GATT_PRIMARY_SERVICE(&insect_cam_service),
     BT_GATT_CHARACTERISTIC(&tx_characteristic_uuid.uuid,(BT_GATT_CHRC_NOTIFY), (BT_GATT_PERM_NONE), NULL, NULL, NULL),
-    BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    BT_GATT_CCC(ccc_cfg_changed_tx, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
     BT_GATT_CHARACTERISTIC(&img_info_characteristic_uuid.uuid,(BT_GATT_CHRC_NOTIFY), (BT_GATT_PERM_NONE), NULL, NULL, NULL),
-    BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    BT_GATT_CCC(ccc_cfg_changed_img_info, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
     BT_GATT_CHARACTERISTIC(&rx_characteristic_uuid.uuid,(BT_GATT_CHRC_WRITE_WITHOUT_RESP | BT_GATT_CHRC_WRITE), BT_GATT_PERM_WRITE, NULL, on_rx_received, NULL)
     );
 
@@ -113,27 +127,97 @@ static void send_large_data(struct bt_conn *conn) {
     uint16_t max_payload = ble_mtu - 3;  // ATT notification overhead
 
     // Filling in dummy data into the img buffer
-    for (int i = 0; i < sizeof(data_to_send); i++) {
-        data_to_send[i] = i & 0xFF;
-    }
+    // for (int i = 0; i < sizeof(data_to_send); i++) {
+    //     data_to_send[i] = i & 0xFF;
+    // }
 
 
-    uint16_t offset = 0;
-    while (offset < sizeof(data_to_send)) {
-        uint16_t len = MIN(max_payload, sizeof(data_to_send) - offset);
-        printk("Attempting to send pkt of size [%d] and first data [%d]",len,data_to_send[offset]);
-        int err = bt_gatt_notify(conn, notify_attr_global, &data_to_send[offset], len);
-        if (err) {
-            printk("Notify failed: %d", err);
-            // return;
+    // Logic 1 tx limited by row width
+    /*
+    for( uint16_t img_rows_sent = 0; img_rows_sent++; img_rows_sent <= IMG_HEIGHT ){
+        uint16_t offset = 0;
+
+        while (offset < IMG_WIDTH) {
+            uint16_t len = MIN(max_payload, IMG_WIDTH - offset);
+            printk("Tx pkt: R[%d] L[%d] S[%d]",img_rows_sent,len,offset);
+            int err = bt_gatt_notify(conn, notify_attr_global, &image[img_rows_sent][offset], len);
+            if (err) {
+                printk("Notify failed: %d", err);
+                // return;
+            }
+            printk("\n");
+
+            offset += len;
+            k_sleep(K_MSEC(1));  // Throttle to avoid flooding
         }
-        printk("\n");
 
-        offset += len;
-        k_sleep(K_MSEC(1));  // Throttle to avoid flooding
     }
+    */
+    
+    // Logic 2: Tx limited by mtu
+    // uint8_t tx_buff[max_payload];
+    // uint16_t offset = 0;
+    // for( uint16_t img_rows_sent = 0; img_rows_sent <= IMG_HEIGHT; img_rows_sent++ ){
+    //     for( uint16_t img_clm_sent = 0; img_clm_sent <= IMG_WIDTH; img_clm_sent++){
+        
+    //         tx_buff[offset++] = image[img_rows_sent][img_clm_sent];
 
-    printk("All chunks sent\n");
+    //         if(offset == max_payload){
+    //             printk("Tx pkt: R[%d] L[%d] S[%d]\n",img_rows_sent,max_payload,offset);
+    //             int err = bt_gatt_notify(conn, notify_attr_global, &tx_buff, max_payload);
+    //             if (err) {
+    //                 printk("Notify failed: %d", err);
+    //             }
+    //             offset = 0;
+    //         }
+    //     }
+    // }
+    // if ( offset > 0 ){
+    //     int err = bt_gatt_notify(conn, notify_attr_global, &tx_buff, offset);
+    //     if (err) {
+    //         printk("Notify failed: %d", err);
+    //     }
+    //     offset = 0;
+
+    // }
+    // uint8_t *temp_img = &image[0][0];
+    size_t img_size = IMG_WIDTH*IMG_HEIGHT;
+    // uint8_t flat_img[IMG_WIDTH * IMG_HEIGHT];
+
+    
+    uint16_t offset = 0;
+    uint16_t counter = 0;
+
+    // if(notif_state[1]){ //ensure that the Tx Notif is Enabled
+
+        while(offset < img_size){
+            uint16_t len = MIN(max_payload, img_size - offset);
+            
+            int err = bt_gatt_notify(conn, notify_attr_global, &image[offset], len);
+            if (err) {
+                printk("Img Tx Notify failed: %d\n", err);
+                tx_state = 0;
+                    // return;
+            }else{
+                printk("Tx pkt:i[%d] L[%d] S[%d]\n",counter,len,offset);
+            }
+            
+            k_sleep(K_MSEC(1));
+            counter++;
+            offset +=len;
+
+        }
+    counter = 0;
+
+    // } else {
+        
+        // printk("Unable to Enable Tx Notifications\n");
+        // return;
+    // }
+    
+    
+
+    // printk("All chunks sent\n");
 }
 
 
@@ -151,16 +235,24 @@ static ssize_t on_rx_received(struct bt_conn *conn,
     }
     printk("\n");
 
+    char_tx = true;
+
+
+    if (len == 1 && rx_data[0] == 1){
+        tx_state = 1;
+        printk("Enabling Single Image..\n");
+        // send_large_data(conn);
+    }
 
     if (len == 1 && rx_data[0] == 2){
         printk("Enabling Stream..\n");
-        stream_en = true;
+        tx_state = 2;
         // send_large_data(conn);
     }
 
     if(len == 1 && rx_data[0] == 3){ 
         printk("Disabling Stream..\n");
-        stream_en = false;
+        tx_state = 0;
 
     }
 
@@ -233,31 +325,39 @@ void run_peripheral_step( uint16_t seconds) {
 
 		k_sleep(K_MSEC(5));
 		if (default_conn == NULL) {
-			printk("Skipping notification since connection is not yet established\n");
+			printk("Idle,Ready to Pair....\n");
+            ble_mtu = 0;
+            tx_state = 0;
 		/* Only send the notification if the UATT MTU supports the required length */
 		} else {
-            uint16_t current_mtu = bt_gatt_get_uatt_mtu(default_conn);
-            if (current_mtu != ble_mtu){
-                ble_mtu = current_mtu;
-                uint8_t img_info[4] = {100,(uint8_t)ble_mtu,100,0};
-                int err = bt_gatt_notify(default_conn, img_info_notify_attr_global, &img_info, 4);
-                if (err) {
-                    printk("Img Information Notify failed: %d\n", err);
-                }
-                printk("MTU setting for Tx: %d!\n",ble_mtu);
-            }
+            
 
-            if(stream_en){
+            // if (notif_state[0]){ //Ensure that the IMG Info Notif is Enabled
+                
+                uint16_t current_mtu = bt_gatt_get_uatt_mtu(default_conn);
+                
+                if ((char_tx == true )|| (current_mtu != ble_mtu)){
+                    ble_mtu = current_mtu;
+                    char_tx = false;
+                    uint8_t img_info[7] = {tx_state,current_mtu & 0xFF,(current_mtu >> 8) & 0xFF,24 & 0xFF,(24 >> 8) & 0xFF,1,1};
+                    int err = bt_gatt_notify(default_conn, img_info_notify_attr_global, &img_info, 7);
+                    if (err) {
+                        printk("Img Information Notify failed: %d\n", err);
+                    }else{
+                        printk("Tx pkt:tx[%d] mtu[%d]\n",tx_state,current_mtu);
+                    }
+                }
+
+            // }else{
+                    // printk("Unable to Enable Img Info Notifications\n
+                    // return;
+            
+            // }
+            
+            if(tx_state == 2){
                 send_large_data(default_conn);
             }
             
-            if (ble_mtu < CHUNK_SIZE) {
-
-                printk("Skipping notification since UATT MTU is not sufficient."
-			       "Required: %d, Actual: %d\n",
-			       CHUNK_SIZE,
-			       ble_mtu);
-            }
 		}
 	}
 }

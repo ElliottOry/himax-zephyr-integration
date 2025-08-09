@@ -6,5 +6,6 @@ project(xiao-ble-stream)
 target_sources(app PRIVATE 
 src/main.c
 src/ble_manager.c
+src/image_data.c
 )
 zephyr_library_include_directories(${ZEPHYR_BASE}/samples/bluetooth)
