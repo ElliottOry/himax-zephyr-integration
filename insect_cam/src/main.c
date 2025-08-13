@@ -51,6 +51,7 @@ static const struct i2c_dt_spec dev_i2c = I2C_DT_SPEC_GET(I2C_NODE);
 static const struct device *gpio0_dev  = DEVICE_DT_GET(DT_NODELABEL(gpio0));
 
 extern void run_peripheral_step( uint16_t seconds, uint8_t *image);
+extern void init_ble();
 /* -------------------------------------------------------------------------- */
 /* Synchronisation primitives                                                 */
 /* -------------------------------------------------------------------------- */
@@ -488,16 +489,16 @@ gpio_pin_interrupt_configure(gpio0_dev, PIN_VSYNC, GPIO_INT_EDGE_RISING);
 //hm_i2c_write(REG_MODE_SELECT, 0x03);
 //k_sem_take(&frame_sem, K_FOREVER);
 //return -1;
-
+init_ble();
 while (true) {
-hm_i2c_write(REG_MODE_SELECT, 0x03);
-//gpio_add_callback(gpio0_dev, &vsync_cb);
-//hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
-k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
-//gpio_remove_callback(gpio0_dev, &vsync_cb);
-//hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
-hm_i2c_write(REG_MODE_SELECT, 0x00);
-send_frame_over_uart_binary();
-run_peripheral_step(0, image);
-}
+    hm_i2c_write(REG_MODE_SELECT, 0x03);
+    //gpio_add_callback(gpio0_dev, &vsync_cb);
+    //hm_i2c_write(REG_MODE_SELECT, 0x03);   /* start streaming  */
+    k_sem_take(&frame_sem, K_FOREVER);     /* wait for 1 frame */
+    //gpio_remove_callback(gpio0_dev, &vsync_cb);
+    //hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
+    hm_i2c_write(REG_MODE_SELECT, 0x00);
+    send_frame_over_uart_binary();
+    run_peripheral_step(0, image);
+    }   
 }

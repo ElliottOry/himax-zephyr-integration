@@ -229,7 +229,7 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.disconnected = disconnected,
 };
 
-void run_peripheral_step( uint16_t seconds, uint8_t *image) {
+void init_ble(){
 
     int err;
 
@@ -257,13 +257,43 @@ void run_peripheral_step( uint16_t seconds, uint8_t *image) {
         return;
     }
 
+}
 
-	for (int i = 0; (i < seconds) || infinite; i++) {
+void run_peripheral_step( uint16_t seconds, uint8_t *image) {
+
+    // int err;
+
+	// err = bt_enable(NULL);
+	// if (err) {
+	// 	printk("Bluetooth init failed (err %d)\n", err);
+	// 	return;
+	// }
+
+	// k_sem_init(&conn_sem, 0, 1);
+	// bt_gatt_cb_register(&gatt_callbacks);
+
+	// k_work_init(&advertise_work, advertising_work_handler);
+
+    
+	// bt_le_adv_start(BT_LE_ADV_CONN_ONE_TIME, adv_ad_data, ARRAY_SIZE(adv_ad_data), NULL, 0);
+	
+
+	// bool infinite = seconds == 0;
+
+    // struct bt_gatt_attr *img_info_notify_attr_global = bt_gatt_find_by_uuid(insect_cam.attrs, 0xffff, &img_info_characteristic_uuid.uuid);
+
+    // if (!img_info_notify_attr_global) {
+    //     printk("Img Info notify attribute not found!\n");
+    //     return;
+    // }
+
+
+	// for (int i = 0; (i < seconds) || infinite; i++) {
 		if (default_conn == NULL) {
 			k_sem_take(&conn_sem, K_FOREVER);
 		}
 
-		k_sleep(K_MSEC(5));
+		// k_sleep(K_MSEC(5));
 		if (default_conn == NULL) {
 			printk("Idle,Ready to Pair....\n");
             ble_mtu = 0;
@@ -299,5 +329,5 @@ void run_peripheral_step( uint16_t seconds, uint8_t *image) {
             }
             
 		}
-	}
+	// }
 }
