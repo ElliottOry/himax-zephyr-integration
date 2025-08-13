@@ -1,2 +1,0 @@
-# Load Sysbuild board Kconfig descriptions.
-osource "/opt/nordic/ncs/v3.0.2/zephyr/boards/adafruit/nrf52_adafruit_feather/Kconfig.sysbuild"

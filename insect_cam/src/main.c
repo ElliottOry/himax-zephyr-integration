@@ -84,36 +84,46 @@ static void start_capture_fn(struct k_work *work)
 /* -------------------------------------------------------------------------- */
 static void line_thread(void *p1, void *p2, void *p3)
 {
-ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
+    ARG_UNUSED(p1); ARG_UNUSED(p2); ARG_UNUSED(p3);
+    
+    while (true) {
+        k_sem_take(&line_sem, K_FOREVER);     /* unblocked by SPIS END ISR   */
 
-while (true) {
-k_sem_take(&line_sem, K_FOREVER);     /* unblocked by SPIS END ISR   */
+        if (!atomic_get(&capturing)) {
+        continue;                         /* ignore stray events         */
+    }
 
-if (!atomic_get(&capturing)) {
-continue;                         /* ignore stray events         */
-}
+    /* Capture one line: wait for VSYNC event or previous DMA completion */
+    arm_next_spis_transfer();
 
-/* Capture one line: wait for VSYNC event or previous DMA completion */
-arm_next_spis_transfer();
 
-/* Advance line index and write pointer for next line */
-atomic_inc(&line_idx);
-current_dst += IMG_WIDTH;
+    /* Advance line index and write pointer for next line */
+    atomic_inc(&line_idx);
+    current_dst += IMG_WIDTH;
 
-/* If we've captured the last line, end frame */
-if (atomic_get(&line_idx) >= IMG_HEIGHT) {
-    printk("Lineeee %3u", (unsigned)atomic_get(&line_idx) - 1);
-atomic_clear(&capturing);
-k_sem_give(&frame_sem);
-}
-}
+    /* If we've captured the last line, end frame */
+    if (atomic_get(&line_idx) >= IMG_HEIGHT) {
+        /* Copy the just-captured frame into a heap buffer and enqueue it */
+        //printk("ploopt");
+        atomic_clear(&capturing);
+        k_sem_give(&frame_sem);
+        }
+    }
 }
 
 /* Arms SPIS for the next 240-byte DMA reception                              */
 static void arm_next_spis_transfer(void)
 {
-struct spi_buf rx  = { .buf = current_dst, .len = IMG_WIDTH};
-struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
+if (IMG_WIDTH >= 2) {
+        current_dst[0] = 0x00;
+        current_dst[IMG_WIDTH - 1] = 0x00;
+    }
+
+    struct spi_buf rx = {
+        .buf = (IMG_WIDTH > 2) ? (current_dst + 1) : current_dst,
+        .len = (IMG_WIDTH > 2) ? (IMG_WIDTH - 2) : IMG_WIDTH
+    };
+    struct spi_buf_set rxset = { .buffers = &rx, .count = 1 };
 
 //nrfx_spis_buffers_set(&spispec, NULL, 0, current_dst, IMG_WIDTH);
 spi_transceive((&spispec)->bus, &(&spispec)->config, NULL, &rxset);
@@ -178,9 +188,11 @@ static const char tail[] = "</FRAME>\n";
 for (int i = 0; i < sizeof hdr - 1; i++)  uart_poll_out(uart_dev, hdr[i]);
 for (size_t i = 0; i < IMAGE_SIZE; i++)
 {
+/*
     if(i%IMG_WIDTH == 0 || i%IMG_WIDTH-1 == 0) {
-        continue; /* skip first and last byte of each line */
+        continue;  skip first and last byte of each line 
     }
+        */
     uart_poll_out(uart_dev, image[i]);
 }   
 for (int i = 0; i < sizeof tail - 1; i++) uart_poll_out(uart_dev, tail[i]);
@@ -498,7 +510,7 @@ while (true) {
     //gpio_remove_callback(gpio0_dev, &vsync_cb);
     //hm_i2c_write(REG_MODE_SELECT, 0x00);   /* standby          */
     hm_i2c_write(REG_MODE_SELECT, 0x00);
-    send_frame_over_uart_binary();
+    //send_frame_over_uart_binary();
     run_peripheral_step(0, image);
     }   
 }

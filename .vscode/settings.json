@@ -6,7 +6,8 @@
         "gpio.h": "c",
         "hm01b0_regs.h": "c",
         "hci.h": "c",
-        "tuple": "c"
+        "tuple": "c",
+        "i2c.h": "c"
     },
     "git.ignoreLimitWarning": true
 }
