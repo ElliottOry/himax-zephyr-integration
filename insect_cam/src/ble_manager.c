@@ -248,14 +248,7 @@ void init_ble(){
 	bt_le_adv_start(BT_LE_ADV_CONN_ONE_TIME, adv_ad_data, ARRAY_SIZE(adv_ad_data), NULL, 0);
 	
 
-	bool infinite = seconds == 0;
-
-    struct bt_gatt_attr *img_info_notify_attr_global = bt_gatt_find_by_uuid(insect_cam.attrs, 0xffff, &img_info_characteristic_uuid.uuid);
-
-    if (!img_info_notify_attr_global) {
-        printk("Img Info notify attribute not found!\n");
-        return;
-    }
+    
 
 }
 
@@ -286,7 +279,12 @@ void run_peripheral_step( uint16_t seconds, uint8_t *image) {
     //     printk("Img Info notify attribute not found!\n");
     //     return;
     // }
+    struct bt_gatt_attr *img_info_notify_attr_global = bt_gatt_find_by_uuid(insect_cam.attrs, 0xffff, &img_info_characteristic_uuid.uuid);
 
+    if (!img_info_notify_attr_global) {
+        printk("Img Info notify attribute not found!\n");
+        return;
+    }
 
 	// for (int i = 0; (i < seconds) || infinite; i++) {
 		if (default_conn == NULL) {
